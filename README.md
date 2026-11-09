@@ -37,11 +37,32 @@ python3 -m ifta_mileage_doctor examples/trips.json --fuel examples/fuel.json --r
 
 ## Input format
 
-Three JSON files. Trips and fuel accept a list, or an object with a
+Trips and fuel JSON accept a list, or an object with a
 `trips` or `fuel` list. Rates accept an object mapping state codes
 to rates, a list of rate objects, or an object with a `rates` key
 holding either shape. Multiple entries for one state are summed.
 Miles, gallons, and rates may be numbers or numeric strings.
+
+Trips and fuel may instead be CSV files selected by a `.csv` filename
+extension (case-insensitive). Trips require `state,miles` headers; fuel
+requires `state,gallons`. The files may be mixed with JSON inputs. Rates
+remain JSON, and stdin trips remain JSON. For example:
+
+```csv
+state,miles
+TX,2400
+OK,1200
+```
+
+```csv
+state,gallons
+TX,280
+OK,170
+```
+
+The same state and number validation applies to CSV rows. Empty files or
+missing/duplicate headers are rejected; a header-only trips file reaches the
+usual zero-total-miles validation.
 
 Trips (`examples/trips.json`):
 
@@ -320,8 +341,8 @@ error: trip TX (entry 0): miles must not be negative: -50
 
 | Flag | Meaning |
 | --- | --- |
-| `input` | Trips JSON file path, or `-` / omitted for stdin |
-| `--fuel` | Fuel purchases JSON file path (required) |
+| `input` | Trips JSON or CSV file path, or `-` / omitted for JSON stdin |
+| `--fuel` | Fuel purchases JSON or CSV file path (required) |
 | `--rates` | Rates JSON file path (required) |
 | `--quarter` | Quarter label for the return, for example 2026-Q3 |
 | `--json` | Emit JSON instead of text |

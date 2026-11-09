@@ -51,6 +51,8 @@ Usage:
 """
 
 import argparse
+import csv
+import io
 import json
 import sys
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -354,15 +356,35 @@ def read_file(path, label):
         raise InputError(f"cannot read {label} file {path}: {exc.strerror or exc}")
 
 
+def load_csv_log(text, label, value_field):
+    """Convert CSV rows to the existing JSON validation path."""
+    try:
+        reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff"), newline=""), strict=True)
+        headers = reader.fieldnames
+        if not headers or len(set(headers)) != len(headers):
+            raise InputError(f"{label}: CSV requires unique column headers")
+        missing = {"state", value_field} - set(headers)
+        if missing:
+            raise InputError(f"{label}: CSV missing required column(s): {', '.join(sorted(missing))}")
+        rows = []
+        for line, row in enumerate(reader, 2):
+            if None in row:
+                raise InputError(f"{label}: CSV row {line} has extra fields")
+            rows.append(row)
+        return json.dumps(rows)
+    except csv.Error as exc:
+        raise InputError(f"{label}: invalid CSV: {exc}")
+
+
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog="ifta-mileage-doctor",
         description="Build an IFTA quarterly return from trip, fuel, and rates JSON files.",
     )
     parser.add_argument("input", nargs="?", default=None,
-                        help="Trips JSON file path, or '-' / omitted for stdin")
+                        help="Trips JSON/CSV file path, or '-' / omitted for JSON stdin")
     parser.add_argument("--fuel", required=True,
-                        help="Fuel purchases JSON file path (gallons by state)")
+                        help="Fuel purchases JSON/CSV file path (gallons by state)")
     parser.add_argument("--rates", required=True,
                         help="Rates JSON file path (tax rate per gallon by state)")
     parser.add_argument("--quarter", default=None,
@@ -391,6 +413,10 @@ def main(argv=None):
             trips_text = read_file(args.input, "trips")
         fuel_text = read_file(args.fuel, "fuel")
         rates_text = read_file(args.rates, "rates")
+        if args.input and args.input != "-" and args.input.lower().endswith(".csv"):
+            trips_text = load_csv_log(trips_text, "trips", "miles")
+        if args.fuel.lower().endswith(".csv"):
+            fuel_text = load_csv_log(fuel_text, "fuel", "gallons")
         miles_by_state = load_trips(trips_text)
         gallons_by_state = load_fuel(fuel_text)
         rates_by_state = load_rates(rates_text)
