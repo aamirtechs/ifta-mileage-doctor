@@ -126,6 +126,18 @@ Emit JSON instead of text:
 python3 ifta_mileage_doctor.py examples/trips.json --fuel examples/fuel.json --rates examples/rates.json --quarter 2026-Q3 --json
 ```
 
+Export the state table as CSV for a spreadsheet:
+
+```bash
+python3 ifta_mileage_doctor.py examples/trips.json --fuel examples/fuel.json --rates examples/rates.json --format csv > return.csv
+```
+
+The CSV includes a header, sorted state rows and a final total row. Missing
+rates and unknown tax amounts are empty, including the total when any tax
+amount is unknown. With `--check`, the CSV stays on stdout and the check
+message goes to stderr; the usual check exit status still applies. `--state`
+filters the displayed rows and total, while checks still use the full return.
+
 Show one state only (fleet MPG stays fleet-wide, since taxable
 gallons are computed from it):
 
@@ -325,6 +337,7 @@ error: trip TX (entry 0): miles must not be negative: -50
 | `--rates` | Rates JSON file path (required) |
 | `--quarter` | Quarter label for the return, for example 2026-Q3 |
 | `--json` | Emit JSON instead of text |
+| `--format` | Select `text` (default), `json`, or `csv`; cannot be combined with `--json` |
 | `--check` | Exit 1 on a missing rate for a state with miles, or on fuel purchased in a state with no miles; else exit 0 |
 | `--state` | Only show this state (two-letter code) |
 

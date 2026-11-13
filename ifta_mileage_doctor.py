@@ -51,6 +51,8 @@ Usage:
 """
 
 import argparse
+import csv
+import io
 import json
 import sys
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -335,6 +337,29 @@ def return_to_json(result):
     }
 
 
+def format_csv(result):
+    """Return a spreadsheet-ready table using the already-computed values."""
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(["state", "miles", "taxable_gallons", "tax_paid_gallons",
+                     "net_gallons", "rate", "tax_due"])
+    for state, entry in sorted(result["states"].items()):
+        writer.writerow([state, gallons_str(entry["miles"]),
+                         gallons_str(entry["taxable_gallons"]),
+                         gallons_str(entry["tax_paid_gallons"]),
+                         gallons_str(entry["net_gallons"]),
+                         str(entry["rate"]) if entry["rate"] is not None else "",
+                         money_str(entry["tax_due"]) if entry["rate"] is not None
+                         and entry["tax_due"] is not None else ""])
+    total_tax = result["grand_total_tax"]
+    writer.writerow(["Total", gallons_str(result["total_miles"]),
+                     gallons_str(result["total_taxable_gallons"]),
+                     gallons_str(result["total_gallons"]),
+                     gallons_str(result["total_net_gallons"]), "",
+                     money_str(total_tax) if total_tax is not None else ""])
+    return output.getvalue()
+
+
 def check_reasons(result):
     reasons = []
     if result["missing_rates"]:
@@ -367,7 +392,10 @@ def parse_args(argv):
                         help="Rates JSON file path (tax rate per gallon by state)")
     parser.add_argument("--quarter", default=None,
                         help="Quarter label for the return, for example 2026-Q3")
-    parser.add_argument("--json", action="store_true", help="Emit JSON instead of text")
+    formats = parser.add_mutually_exclusive_group()
+    formats.add_argument("--json", action="store_true", help="Emit JSON instead of text")
+    formats.add_argument("--format", choices=("text", "json", "csv"), default="text",
+                         help="Output format (default: text)")
     parser.add_argument("--check", action="store_true",
                         help="Exit 1 on a missing rate for a state with miles, "
                              "or on fuel purchased in a state with no miles")
@@ -426,19 +454,24 @@ def main(argv=None):
                                         and entry["miles"] > 0 else [])
             display["unaccounted_fuel_states"] = (
                 [args.state] if entry["miles"] <= 0 and entry["tax_paid_gallons"] > 0 else [])
-    if args.json:
+    json_output = args.json or args.format == "json"
+    csv_output = args.format == "csv"
+    if json_output:
         print(json.dumps(return_to_json(display), indent=2))
+    elif csv_output:
+        print(format_csv(display), end="")
     else:
         print(format_text(display), end="")
     if args.check:
         reasons = check_reasons(result)
         if reasons:
-            if not args.json:
-                print("CHECK FAILED: " + "; ".join(reasons))
+            if not json_output:
+                print("CHECK FAILED: " + "; ".join(reasons),
+                      file=sys.stderr if csv_output else sys.stdout)
             return 1
-        if not args.json:
+        if not json_output:
             print("CHECK PASSED: all states with miles have rates, "
-                  "no fuel in states with no miles")
+                  "no fuel in states with no miles", file=sys.stderr if csv_output else sys.stdout)
     return 0
 
 
